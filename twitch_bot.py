@@ -19,6 +19,9 @@ logger = logging.getLogger(__name__)
 # Словарь для хранения подписок пользователей
 user_subscriptions = {}
 
+# Словарь для отслеживания активных стримов
+active_streams = {username: False for username in TWITCH_USERNAMES}
+
 # Функция для получения OAuth токена Twitch
 def get_twitch_oauth_token():
     url = 'https://id.twitch.tv/oauth2/token'
@@ -43,13 +46,21 @@ def check_twitch_streams(bot, twitch_oauth_token):
         response = requests.get(TWITCH_API_URL, headers=headers, params=params)
         data = response.json()
 
-        # Если стрим идет, уведомляем всех подписанных пользователей
-        if data['data']:
+        # Проверяем, идет ли стрим
+        stream_live = bool(data['data'])
+
+        # Если стрим начался и ранее не было уведомления
+        if stream_live and not active_streams[username]:
             stream_title = data['data'][0]['title']
             for chat_id, subscriptions in user_subscriptions.items():
                 if username in subscriptions:
                     message = f'{username} начал трансляцию: {stream_title}\nСмотреть: https://twitch.tv/{username}'
                     bot.send_message(chat_id=chat_id, text=message)
+            active_streams[username] = True  # Обновляем статус стрима как активный
+
+        # Если стрим закончился, сбрасываем статус
+        elif not stream_live and active_streams[username]:
+            active_streams[username] = False
 
 # Периодическая проверка стримов
 def schedule_check_streams(bot):
