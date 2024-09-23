@@ -86,14 +86,19 @@ def main():
     updater = Updater(TELEGRAM_TOKEN, use_context=True)
     dispatcher = updater.dispatcher
 
+    # Добавляем команды
     dispatcher.add_handler(CommandHandler("start", start))
     dispatcher.add_handler(CallbackQueryHandler(button_callback))
 
     # Настройка webhook
-    # Убедитесь, что здесь используется ваш правильный домен Railway (вместо 0.0.0.0)
-    updater.bot.set_webhook(url='https://worker-production-1f60.up.railway.app/' + TELEGRAM_TOKEN)
-    updater.start_webhook(listen="0.0.0.0", port=8443, url_path=TELEGRAM_TOKEN)
+    # Укажите публичный URL вашего Railway приложения
+    webhook_url = 'https://worker-production-1f60.up.railway.app/' + TELEGRAM_TOKEN
+    updater.bot.set_webhook(url=webhook_url)
+    
+    # Запускаем webhook сервер с указанием публичного URL
+    updater.start_webhook(listen="0.0.0.0", port=8443, url_path=TELEGRAM_TOKEN, webhook_url=webhook_url)
 
+    # Ожидание сигналов
     updater.idle()
 
 if __name__ == '__main__':
