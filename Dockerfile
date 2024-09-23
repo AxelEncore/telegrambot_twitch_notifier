@@ -4,10 +4,8 @@ FROM python:3.11-slim
 # Устанавливаем рабочую директорию внутри контейнера
 WORKDIR /app
 
-# Устанавливаем системные зависимости, необходимые для создания venv и установки зависимостей
+# Устанавливаем системные зависимости
 RUN apt-get update && apt-get install -y \
-    python3-venv \
-    python3-dev \
     gcc \
     libffi-dev \
     libssl-dev \
@@ -16,15 +14,11 @@ RUN apt-get update && apt-get install -y \
 # Копируем файл с зависимостями в контейнер
 COPY requirements.txt .
 
-# Создаем виртуальное окружение и устанавливаем зависимости
-RUN python -m venv /opt/venv && \
-    /opt/venv/bin/pip install --upgrade pip && \
-    /opt/venv/bin/pip install -r requirements.txt
+# Устанавливаем зависимости напрямую в контейнер
+RUN pip install --upgrade pip && \
+    pip install -r requirements.txt
 
-# Добавляем виртуальное окружение в PATH
-ENV PATH="/opt/venv/bin:$PATH"
-
-# Копируем остальные файлы проекта в контейнер
+# Копируем все файлы проекта в контейнер
 COPY . .
 
 # Открываем порт (если это необходимо для вашего приложения)
