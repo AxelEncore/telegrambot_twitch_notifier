@@ -61,7 +61,7 @@ def start(update: Update, context: CallbackContext) -> None:
     # Сообщение с картинкой и кнопками
     context.bot.send_photo(
         chat_id=chat_id,
-        photo="https://valid-url-to-image.com/image.jpg",  # Убедитесь, что это действительная ссылка
+        photo="https://axelencore.ru/wp-content/uploads/2024/09/Oreo.jpg",  # Убедитесь, что это действительная ссылка
         caption="Привет, я бот уведомлений стримов Encore\nОт каких стримеров вы хотите получать уведомления? Нажмите на кнопки",
         reply_markup=reply_markup
     )
