@@ -1,10 +1,10 @@
-import sqlite3
+import json
+import os
 import logging
 import requests
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Updater, CommandHandler, CallbackQueryHandler, CallbackContext
 from threading import Timer
-import os
 
 # Настройки
 TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
@@ -13,57 +13,31 @@ TWITCH_CLIENT_SECRET = os.getenv('TWITCH_CLIENT_SECRET')
 TWITCH_USERNAMES = ['axelencore', 'yatoencoree', 'julia_encore', 'aliseencore']
 TWITCH_API_URL = 'https://api.twitch.tv/helix/streams'
 CHECK_INTERVAL = 60  # Интервал проверки стримов (в секундах)
-DB_FILE = 'subscriptions.db'  # Файл базы данных
+SUBSCRIPTIONS_FILE = "subscriptions.json"  # Файл для хранения подписок
 
 # Логгирование
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Функция для подключения к базе данных SQLite
-def connect_db():
-    return sqlite3.connect(DB_FILE)
+# Словарь для хранения подписок пользователей (загружаем при старте)
+user_subscriptions = {}
 
-# Создание таблицы, если она не существует
-def create_table():
-    conn = connect_db()
-    cursor = conn.cursor()
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS subscriptions (
-        chat_id INTEGER PRIMARY KEY,
-        streamers TEXT
-    );
-    """)
-    conn.commit()
-    cursor.close()
-    conn.close()
+# Словарь для отслеживания активных стримов
+active_streams = {username: False for username in TWITCH_USERNAMES}
 
-# Функция для загрузки подписок из базы данных
+# Функция для чтения подписок из файла
 def load_subscriptions():
-    conn = connect_db()
-    cursor = conn.cursor()
-    cursor.execute("SELECT chat_id, streamers FROM subscriptions;")
-    rows = cursor.fetchall()
-    subscriptions = {row[0]: row[1].split(',') for row in rows if row[1]}  # Преобразуем строку в список
-    cursor.close()
-    conn.close()
-    return subscriptions
+    global user_subscriptions
+    if os.path.exists(SUBSCRIPTIONS_FILE):
+        with open(SUBSCRIPTIONS_FILE, 'r') as f:
+            user_subscriptions = json.load(f)
+    else:
+        user_subscriptions = {}
 
-# Функция для сохранения подписок в базу данных
-def save_subscription(chat_id, streamers):
-    conn = connect_db()
-    cursor = conn.cursor()
-    cursor.execute("""
-        INSERT INTO subscriptions (chat_id, streamers)
-        VALUES (?, ?)
-        ON CONFLICT(chat_id) 
-        DO UPDATE SET streamers=excluded.streamers;
-    """, (chat_id, ','.join(streamers)))  # Сохраняем список как строку
-    conn.commit()
-    cursor.close()
-    conn.close()
-
-# Словарь для хранения подписок пользователей (загружаем данные при старте)
-user_subscriptions = load_subscriptions()
+# Функция для сохранения подписок в файл
+def save_subscriptions():
+    with open(SUBSCRIPTIONS_FILE, 'w') as f:
+        json.dump(user_subscriptions, f)
 
 # Функция для получения OAuth токена Twitch
 def get_twitch_oauth_token():
@@ -138,18 +112,16 @@ def button_callback(update: Update, context: CallbackContext) -> None:
     # Добавление стримера в подписки
     if streamer not in user_subscriptions[chat_id]:
         user_subscriptions[chat_id].append(streamer)
-        save_subscription(chat_id, user_subscriptions[chat_id])  # Сохраняем подписки в базу данных
-        query.answer()
+        save_subscriptions()  # Сохранение подписок после изменений
+        query.answer()  # Отправляем подтверждение нажатия
         context.bot.send_message(chat_id=chat_id, text=f"Вы подписались на стримы от {streamer}")
     else:
-        query.answer()
+        query.answer()  # Если уже подписан, не добавляем повторно
         context.bot.send_message(chat_id=chat_id, text=f"Вы уже подписаны на {streamer}")
 
 # Запуск бота
 def main():
-    # Создаем таблицу, если ее еще нет
-    create_table()
-
+    load_subscriptions()  # Загружаем подписки из файла при старте
     updater = Updater(TELEGRAM_TOKEN, use_context=True)
     dispatcher = updater.dispatcher
 
