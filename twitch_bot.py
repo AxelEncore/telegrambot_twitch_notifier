@@ -2,7 +2,6 @@ import logging
 import requests
 from telegram import Update, Bot, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Updater, CommandHandler, CallbackQueryHandler, CallbackContext
-from threading import Timer
 
 # Настройки
 TELEGRAM_TOKEN = '7588357806:AAFZ1beGNMOTtJNX6wA5o69_uQMpW_XQa-o'
@@ -51,12 +50,6 @@ def check_twitch_streams(bot: Bot, twitch_oauth_token: str):
                     message = f'{username} начал трансляцию: {stream_title}\nСмотреть: https://twitch.tv/{username}'
                     bot.send_message(chat_id=chat_id, text=message)
 
-# Периодическая проверка статуса стримов
-def schedule_check_streams(bot: Bot, interval: int):
-    twitch_oauth_token = get_twitch_oauth_token()
-    check_twitch_streams(bot, twitch_oauth_token)
-    Timer(interval, schedule_check_streams, [bot, interval]).start()
-
 # Стартовая команда
 def start(update: Update, context: CallbackContext) -> None:
     chat_id = update.message.chat_id
@@ -94,20 +87,11 @@ def main():
     updater = Updater(TELEGRAM_TOKEN, use_context=True)
     dispatcher = updater.dispatcher
 
-    # Команда /start
     dispatcher.add_handler(CommandHandler("start", start))
-    
-    # Обработка кнопок
     dispatcher.add_handler(CallbackQueryHandler(button_callback))
 
-    # Запуск проверки стримов
+    # Запуск бота
     updater.start_polling()
-    
-    # Периодическая проверка стримов
-    bot = updater.bot
-    schedule_check_streams(bot, CHECK_INTERVAL)
-
-    # Ожидание завершения
     updater.idle()
 
 if __name__ == '__main__':
