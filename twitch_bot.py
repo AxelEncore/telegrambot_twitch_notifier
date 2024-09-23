@@ -7,10 +7,10 @@ from telegram.ext import Updater, CommandHandler, CallbackQueryHandler, Callback
 from threading import Timer
 
 # Настройки
-TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
-TWITCH_CLIENT_ID = os.getenv('TWITCH_CLIENT_ID')
-TWITCH_CLIENT_SECRET = os.getenv('TWITCH_CLIENT_SECRET')
-TWITCH_USERNAMES = ['axelencore', 'yatoencoree', 'julia_encore', 'aliseencore']
+TELEGRAM_TOKEN = '8049016680:AAFo45bEX8HlSnKiX_bfnYY_KhaWaUJu7PE'
+TWITCH_CLIENT_ID = 'w2y2t05i7iwk43yj6ncyvtvnqzmkze'
+TWITCH_CLIENT_SECRET = 'egxo7iiha9dhv6ap4z1k4rvfpltbzg'
+TWITCH_USERNAMES = ['axelencore', 'yatoencoree', 'julia_encore', 'aliseencore', 'hotabych4', 'waterspace17']
 TWITCH_API_URL = 'https://api.twitch.tv/helix/streams'
 CHECK_INTERVAL = 60  # Интервал проверки стримов (в секундах)
 SUBSCRIPTIONS_FILE = "subscriptions.json"  # Файл для хранения подписок
