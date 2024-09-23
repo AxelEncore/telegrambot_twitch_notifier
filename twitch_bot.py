@@ -36,8 +36,10 @@ def load_subscriptions():
                     user_subscriptions = {}
                 else:
                     user_subscriptions = json.load(f)
+                logger.info(f"Подписки успешно загружены: {user_subscriptions}")
         except (json.JSONDecodeError, FileNotFoundError):
             # Если файл поврежден или его нет, инициализируем пустой словарь
+            logger.error("Ошибка загрузки файла подписок. Инициализация пустого словаря.")
             user_subscriptions = {}
             save_subscriptions()
     else:
@@ -45,8 +47,12 @@ def load_subscriptions():
 
 # Функция для сохранения подписок в файл
 def save_subscriptions():
-    with open(SUBSCRIPTIONS_FILE, 'w') as f:
-        json.dump(user_subscriptions, f)
+    try:
+        with open(SUBSCRIPTIONS_FILE, 'w') as f:
+            json.dump(user_subscriptions, f, indent=4)  # Добавим форматирование для читаемости
+        logger.info(f"Подписки успешно сохранены: {user_subscriptions}")
+    except Exception as e:
+        logger.error(f"Ошибка при сохранении подписок: {e}")
 
 # Остальной код (проверка стримов и логика работы бота) остается без изменений
 
