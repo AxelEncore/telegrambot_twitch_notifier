@@ -99,7 +99,7 @@ def start(update: Update, context: CallbackContext) -> None:
     context.bot.send_photo(
         chat_id=chat_id,
         photo="https://axelencore.ru/wp-content/uploads/2024/09/Oreo.jpg",  # Убедитесь, что это действительная ссылка
-        caption="Привет, я бот Oreo - уведомляю о стримах Encore\nОт каких стримеров вы хотите получать уведомления? Нажмите на кнопки",
+        caption="Привет, я бот Oreo - уведомляю о стримах Encore\nОт каких стримеров вы хотите получать уведомления?",
         reply_markup=reply_markup
     )
 
