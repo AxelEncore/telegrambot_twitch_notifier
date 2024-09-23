@@ -29,8 +29,17 @@ active_streams = {username: False for username in TWITCH_USERNAMES}
 def load_subscriptions():
     global user_subscriptions
     if os.path.exists(SUBSCRIPTIONS_FILE):
-        with open(SUBSCRIPTIONS_FILE, 'r') as f:
-            user_subscriptions = json.load(f)
+        try:
+            with open(SUBSCRIPTIONS_FILE, 'r') as f:
+                # Проверяем, если файл пустой
+                if os.stat(SUBSCRIPTIONS_FILE).st_size == 0:
+                    user_subscriptions = {}
+                else:
+                    user_subscriptions = json.load(f)
+        except (json.JSONDecodeError, FileNotFoundError):
+            # Если файл поврежден или его нет, инициализируем пустой словарь
+            user_subscriptions = {}
+            save_subscriptions()
     else:
         user_subscriptions = {}
 
@@ -38,6 +47,8 @@ def load_subscriptions():
 def save_subscriptions():
     with open(SUBSCRIPTIONS_FILE, 'w') as f:
         json.dump(user_subscriptions, f)
+
+# Остальной код (проверка стримов и логика работы бота) остается без изменений
 
 # Функция для получения OAuth токена Twitch
 def get_twitch_oauth_token():
@@ -99,7 +110,7 @@ def start(update: Update, context: CallbackContext) -> None:
     context.bot.send_photo(
         chat_id=chat_id,
         photo="https://axelencore.ru/wp-content/uploads/2024/09/Oreo.jpg",  # Убедитесь, что это действительная ссылка
-        caption="Привет, я бот Oreo - уведомляю о стримах Encore\nОт каких стримеров вы хотите получать уведомления?",
+        caption="Привет, я бот Oreo - уведомляю о стримах Encore\nОт каких стримеров вы хотите получать уведомления? Нажмите на кнопки",
         reply_markup=reply_markup
     )
 
