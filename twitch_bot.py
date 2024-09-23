@@ -2,6 +2,7 @@ import logging
 import requests
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Updater, CommandHandler, CallbackQueryHandler, CallbackContext
+from threading import Timer
 
 # Настройки
 TELEGRAM_TOKEN = '8049016680:AAFo45bEX8HlSnKiX_bfnYY_KhaWaUJu7PE'
@@ -9,6 +10,7 @@ TWITCH_CLIENT_ID = 'w2y2t05i7iwk43yj6ncyvtvnqzmkze'
 TWITCH_CLIENT_SECRET = 'egxo7iiha9dhv6ap4z1k4rvfpltbzg'
 TWITCH_USERNAMES = ['axelencore', 'yatoencoree', 'julia_encore', 'aliseencore']
 TWITCH_API_URL = 'https://api.twitch.tv/helix/streams'
+CHECK_INTERVAL = 60  # Интервал проверки стримов (в секундах)
 
 # Логгирование
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
@@ -48,6 +50,12 @@ def check_twitch_streams(bot, twitch_oauth_token):
                 if username in subscriptions:
                     message = f'{username} начал трансляцию: {stream_title}\nСмотреть: https://twitch.tv/{username}'
                     bot.send_message(chat_id=chat_id, text=message)
+
+# Периодическая проверка стримов
+def schedule_check_streams(bot):
+    twitch_oauth_token = get_twitch_oauth_token()
+    check_twitch_streams(bot, twitch_oauth_token)
+    Timer(CHECK_INTERVAL, schedule_check_streams, [bot]).start()
 
 # Стартовая команда
 def start(update: Update, context: CallbackContext) -> None:
@@ -90,15 +98,15 @@ def main():
     dispatcher.add_handler(CommandHandler("start", start))
     dispatcher.add_handler(CallbackQueryHandler(button_callback))
 
-    # Настройка webhook
-    # Укажите публичный URL вашего Railway приложения
+    # Запускаем проверку стримов
+    bot = updater.bot
+    schedule_check_streams(bot)
+
+    # Запуск webhook сервера
     webhook_url = 'https://worker-production-1f60.up.railway.app/' + TELEGRAM_TOKEN
     updater.bot.set_webhook(url=webhook_url)
-    
-    # Запускаем webhook сервер с указанием публичного URL
     updater.start_webhook(listen="0.0.0.0", port=8443, url_path=TELEGRAM_TOKEN, webhook_url=webhook_url)
 
-    # Ожидание сигналов
     updater.idle()
 
 if __name__ == '__main__':
