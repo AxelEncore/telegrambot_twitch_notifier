@@ -1,6 +1,6 @@
 import logging
 import requests
-from telegram import Update, Bot, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Updater, CommandHandler, CallbackQueryHandler, CallbackContext
 
 # Настройки
@@ -9,7 +9,6 @@ TWITCH_CLIENT_ID = 'w2y2t05i7iwk43yj6ncyvtvnqzmkze'
 TWITCH_CLIENT_SECRET = 'egxo7iiha9dhv6ap4z1k4rvfpltbzg'
 TWITCH_USERNAMES = ['axelencore', 'yatoencoree', 'julia_encore', 'aliseencore']
 TWITCH_API_URL = 'https://api.twitch.tv/helix/streams'
-CHECK_INTERVAL = 60  # интервал проверки стримов (в секундах)
 
 # Логгирование
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
@@ -31,17 +30,17 @@ def get_twitch_oauth_token():
     return response.json()['access_token']
 
 # Проверка статуса стримов
-def check_twitch_streams(bot: Bot, twitch_oauth_token: str):
+def check_twitch_streams(bot, twitch_oauth_token):
     headers = {
         'Client-ID': TWITCH_CLIENT_ID,
         'Authorization': f'Bearer {twitch_oauth_token}'
     }
-    
+
     for username in TWITCH_USERNAMES:
         params = {'user_login': username}
         response = requests.get(TWITCH_API_URL, headers=headers, params=params)
         data = response.json()
-        
+
         # Если стрим идет, уведомляем всех подписанных пользователей
         if data['data']:
             stream_title = data['data'][0]['title']
@@ -62,7 +61,7 @@ def start(update: Update, context: CallbackContext) -> None:
     # Сообщение с картинкой и кнопками
     context.bot.send_photo(
         chat_id=chat_id,
-        photo="https://example.com/image.jpg",  # Замените ссылку на вашу картинку
+        photo="https://valid-url-to-image.com/image.jpg",  # Убедитесь, что это действительная ссылка
         caption="Привет, я бот уведомлений стримов Encore\nОт каких стримеров вы хотите получать уведомления? Нажмите на кнопки",
         reply_markup=reply_markup
     )
@@ -90,8 +89,10 @@ def main():
     dispatcher.add_handler(CommandHandler("start", start))
     dispatcher.add_handler(CallbackQueryHandler(button_callback))
 
-    # Запуск бота
-    updater.start_polling()
+    # Настройка webhook
+    updater.bot.set_webhook(url='https://worker-production-1f60.up.railway.app')
+    updater.start_webhook(listen="0.0.0.0", port=8443, url_path=TELEGRAM_TOKEN)
+
     updater.idle()
 
 if __name__ == '__main__':
