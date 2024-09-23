@@ -6,15 +6,6 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Updater, CommandHandler, CallbackQueryHandler, CallbackContext
 from threading import Timer
 
-# Настройки
-TELEGRAM_TOKEN = '8049016680:AAFo45bEX8HlSnKiX_bfnYY_KhaWaUJu7PE'
-TWITCH_CLIENT_ID = 'w2y2t05i7iwk43yj6ncyvtvnqzmkze'
-TWITCH_CLIENT_SECRET = 'egxo7iiha9dhv6ap4z1k4rvfpltbzg'
-TWITCH_USERNAMES = ['axelencore', 'yatoencoree', 'julia_encore', 'aliseencore', 'hotabych4', 'waterspace17']
-TWITCH_API_URL = 'https://api.twitch.tv/helix/streams'
-CHECK_INTERVAL = 60  # Интервал проверки стримов (в секундах)
-SUBSCRIPTIONS_FILE = "subscriptions.json"  # Файл для хранения подписок
-
 # Логгирование
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -105,8 +96,10 @@ def schedule_check_streams(bot):
 # Стартовая команда
 def start(update: Update, context: CallbackContext) -> None:
     chat_id = update.message.chat_id
+    # Инициализация подписок для нового пользователя
     if chat_id not in user_subscriptions:
         user_subscriptions[chat_id] = []  # Инициализация пустого списка подписок
+        save_subscriptions()  # Сохраняем файл после инициализации
 
     # Кнопки с именами стримеров
     keyboard = [[InlineKeyboardButton(streamer, callback_data=streamer)] for streamer in TWITCH_USERNAMES]
@@ -125,6 +118,10 @@ def button_callback(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
     streamer = query.data
     chat_id = query.message.chat_id
+    
+    # Убедимся, что у пользователя есть ключ в словаре, если он уже не был инициализирован
+    if chat_id not in user_subscriptions:
+        user_subscriptions[chat_id] = []  # Инициализация подписок для нового пользователя
     
     # Добавление стримера в подписки
     if streamer not in user_subscriptions[chat_id]:
