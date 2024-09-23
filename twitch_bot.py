@@ -1,38 +1,64 @@
 import logging
 import requests
-import json  # Для работы с JSON-файлом
+import psycopg2
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Updater, CommandHandler, CallbackQueryHandler, CallbackContext
 from threading import Timer
+import os
 
 # Настройки
-TELEGRAM_TOKEN = '8049016680:AAFo45bEX8HlSnKiX_bfnYY_KhaWaUJu7PE'
-TWITCH_CLIENT_ID = 'w2y2t05i7iwk43yj6ncyvtvnqzmkze'
-TWITCH_CLIENT_SECRET = 'egxo7iiha9dhv6ap4z1k4rvfpltbzg'
-TWITCH_USERNAMES = ['axelencore', 'yatoencoree', 'julia_encore', 'aliseencore', 'hotabych4', 'waterspace17']
+TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
+TWITCH_CLIENT_ID = os.getenv('TWITCH_CLIENT_ID')
+TWITCH_CLIENT_SECRET = os.getenv('TWITCH_CLIENT_SECRET')
+TWITCH_USERNAMES = ['axelencore', 'yatoencoree', 'julia_encore', 'aliseencore']
 TWITCH_API_URL = 'https://api.twitch.tv/helix/streams'
 CHECK_INTERVAL = 60  # Интервал проверки стримов (в секундах)
-SUBSCRIPTIONS_FILE = 'subscriptions.json'  # Файл для хранения подписок
+
+# Параметры подключения к базе данных
+DB_HOST = os.getenv('DB_HOST')
+DB_PORT = os.getenv('DB_PORT')
+DB_NAME = os.getenv('DB_NAME')
+DB_USER = os.getenv('DB_USER')
+DB_PASSWORD = os.getenv('DB_PASSWORD')
 
 # Логгирование
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Словарь для отслеживания активных стримов
-active_streams = {username: False for username in TWITCH_USERNAMES}
+# Подключение к базе данных
+def connect_db():
+    return psycopg2.connect(
+        host=DB_HOST,
+        port=DB_PORT,
+        dbname=DB_NAME,
+        user=DB_USER,
+        password=DB_PASSWORD
+    )
 
-# Функция для сохранения подписок в JSON-файл
-def save_subscriptions():
-    with open(SUBSCRIPTIONS_FILE, 'w') as f:
-        json.dump(user_subscriptions, f)
-
-# Функция для загрузки подписок из JSON-файла
+# Функция для загрузки подписок из базы данных
 def load_subscriptions():
-    try:
-        with open(SUBSCRIPTIONS_FILE, 'r') as f:
-            return json.load(f)
-    except FileNotFoundError:
-        return {}
+    conn = connect_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT chat_id, streamers FROM subscriptions;")
+    rows = cursor.fetchall()
+    subscriptions = {row[0]: row[1] for row in rows}
+    cursor.close()
+    conn.close()
+    return subscriptions
+
+# Функция для сохранения подписок в базу данных
+def save_subscription(chat_id, streamers):
+    conn = connect_db()
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO subscriptions (chat_id, streamers)
+        VALUES (%s, %s)
+        ON CONFLICT (chat_id) 
+        DO UPDATE SET streamers = EXCLUDED.streamers;
+    """, (chat_id, streamers))
+    conn.commit()
+    cursor.close()
+    conn.close()
 
 # Словарь для хранения подписок пользователей (загружаем данные при старте)
 user_subscriptions = load_subscriptions()
@@ -96,7 +122,7 @@ def start(update: Update, context: CallbackContext) -> None:
     # Сообщение с картинкой и кнопками
     context.bot.send_photo(
         chat_id=chat_id,
-        photo="https://axelencore.ru/wp-content/uploads/2024/09/Oreo.jpg",  # Убедитесь, что это действительная ссылка
+        photo="https://axelencore.ru/wp-content/uploads/2024/09/Oreo.jpg",
         caption="Привет, я бот Oreo - уведомляю о стримах Encore\nОт каких стримеров вы хотите получать уведомления? Нажмите на кнопки",
         reply_markup=reply_markup
     )
@@ -110,11 +136,11 @@ def button_callback(update: Update, context: CallbackContext) -> None:
     # Добавление стримера в подписки
     if streamer not in user_subscriptions[chat_id]:
         user_subscriptions[chat_id].append(streamer)
-        save_subscriptions()  # Сохраняем подписки в файл после обновления
-        query.answer()  # Отправляем подтверждение нажатия
+        save_subscription(chat_id, user_subscriptions[chat_id])  # Сохраняем подписки в базу данных
+        query.answer()
         context.bot.send_message(chat_id=chat_id, text=f"Вы подписались на стримы от {streamer}")
     else:
-        query.answer()  # Если уже подписан, не добавляем повторно
+        query.answer()
         context.bot.send_message(chat_id=chat_id, text=f"Вы уже подписаны на {streamer}")
 
 # Запуск бота
