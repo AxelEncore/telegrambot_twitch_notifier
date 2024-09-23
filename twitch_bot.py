@@ -6,15 +6,25 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Updater, CommandHandler, CallbackQueryHandler, CallbackContext
 from threading import Timer
 
+# Настройки
+TELEGRAM_TOKEN = '8049016680:AAFo45bEX8HlSnKiX_bfnYY_KhaWaUJu7PE'
+TWITCH_CLIENT_ID = 'w2y2t05i7iwk43yj6ncyvtvnqzmkze'
+TWITCH_CLIENT_SECRET = 'egxo7iiha9dhv6ap4z1k4rvfpltbzg'
+TWITCH_USERNAMES = ['axelencore', 'yatoencoree', 'julia_encore', 'aliseencore', 'hotabych4', 'waterspace17']
+TWITCH_API_URL = 'https://api.twitch.tv/helix/streams'
+CHECK_INTERVAL = 60  # Интервал проверки стримов (в секундах)
+SUBSCRIPTIONS_FILE = 'subscriptions.json'  # Файл для хранения подписок
+
+
+# Словарь для отслеживания активных стримов
+active_streams = {username: False for username in TWITCH_USERNAMES}
+
 # Логгирование
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Словарь для хранения подписок пользователей (загружаем при старте)
 user_subscriptions = {}
-
-# Словарь для отслеживания активных стримов
-active_streams = {username: False for username in TWITCH_USERNAMES}
 
 # Функция для чтения подписок из файла
 def load_subscriptions():
