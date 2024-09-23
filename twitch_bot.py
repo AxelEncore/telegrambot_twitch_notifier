@@ -1,5 +1,6 @@
 import logging
 import requests
+import json  # Для работы с JSON-файлом
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Updater, CommandHandler, CallbackQueryHandler, CallbackContext
 from threading import Timer
@@ -8,19 +9,33 @@ from threading import Timer
 TELEGRAM_TOKEN = '8049016680:AAFo45bEX8HlSnKiX_bfnYY_KhaWaUJu7PE'
 TWITCH_CLIENT_ID = 'w2y2t05i7iwk43yj6ncyvtvnqzmkze'
 TWITCH_CLIENT_SECRET = 'egxo7iiha9dhv6ap4z1k4rvfpltbzg'
-TWITCH_USERNAMES = ['axelencore', 'yatoencoree', 'julia_encore', 'aliseencore']
+TWITCH_USERNAMES = ['axelencore', 'yatoencoree', 'julia_encore', 'aliseencore', 'hotabych4', 'waterspace17']
 TWITCH_API_URL = 'https://api.twitch.tv/helix/streams'
 CHECK_INTERVAL = 60  # Интервал проверки стримов (в секундах)
+SUBSCRIPTIONS_FILE = 'subscriptions.json'  # Файл для хранения подписок
 
 # Логгирование
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Словарь для хранения подписок пользователей
-user_subscriptions = {}
-
 # Словарь для отслеживания активных стримов
 active_streams = {username: False for username in TWITCH_USERNAMES}
+
+# Функция для сохранения подписок в JSON-файл
+def save_subscriptions():
+    with open(SUBSCRIPTIONS_FILE, 'w') as f:
+        json.dump(user_subscriptions, f)
+
+# Функция для загрузки подписок из JSON-файла
+def load_subscriptions():
+    try:
+        with open(SUBSCRIPTIONS_FILE, 'r') as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return {}
+
+# Словарь для хранения подписок пользователей (загружаем данные при старте)
+user_subscriptions = load_subscriptions()
 
 # Функция для получения OAuth токена Twitch
 def get_twitch_oauth_token():
@@ -71,7 +86,8 @@ def schedule_check_streams(bot):
 # Стартовая команда
 def start(update: Update, context: CallbackContext) -> None:
     chat_id = update.message.chat_id
-    user_subscriptions[chat_id] = []  # Инициализация пустого списка подписок
+    if chat_id not in user_subscriptions:
+        user_subscriptions[chat_id] = []  # Инициализация пустого списка подписок
 
     # Кнопки с именами стримеров
     keyboard = [[InlineKeyboardButton(streamer, callback_data=streamer)] for streamer in TWITCH_USERNAMES]
@@ -94,6 +110,7 @@ def button_callback(update: Update, context: CallbackContext) -> None:
     # Добавление стримера в подписки
     if streamer not in user_subscriptions[chat_id]:
         user_subscriptions[chat_id].append(streamer)
+        save_subscriptions()  # Сохраняем подписки в файл после обновления
         query.answer()  # Отправляем подтверждение нажатия
         context.bot.send_message(chat_id=chat_id, text=f"Вы подписались на стримы от {streamer}")
     else:
