@@ -4,7 +4,7 @@ from telegram import Update, Bot, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Updater, CommandHandler, CallbackQueryHandler, CallbackContext
 
 # Настройки
-TELEGRAM_TOKEN = '7588357806:AAFZ1beGNMOTtJNX6wA5o69_uQMpW_XQa-o'
+TELEGRAM_TOKEN = '8049016680:AAFo45bEX8HlSnKiX_bfnYY_KhaWaUJu7PE'
 TWITCH_CLIENT_ID = 'w2y2t05i7iwk43yj6ncyvtvnqzmkze'
 TWITCH_CLIENT_SECRET = 'egxo7iiha9dhv6ap4z1k4rvfpltbzg'
 TWITCH_USERNAMES = ['axelencore', 'yatoencoree', 'julia_encore', 'aliseencore']
