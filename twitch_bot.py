@@ -1,9 +1,7 @@
 import logging
 import requests
-import time
-import schedule
-from telegram import Update, Bot
-from telegram.ext import Updater, CommandHandler, CallbackContext
+from telegram import Update, Bot, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Updater, CommandHandler, CallbackQueryHandler, CallbackContext
 
 # Настройки
 TELEGRAM_TOKEN = '7588357806:AAFZ1beGNMOTtJNX6wA5o69_uQMpW_XQa-o'
@@ -13,12 +11,12 @@ TWITCH_USERNAMES = ['axelencore', 'yatoencoree', 'julia_encore', 'aliseencore']
 TWITCH_API_URL = 'https://api.twitch.tv/helix/streams'
 CHECK_INTERVAL = 60  # интервал проверки стримов (в секундах)
 
-# Словарь для отслеживания состояния трансляций
-live_status = {username: False for username in TWITCH_USERNAMES}
-
 # Логгирование
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Словарь для хранения подписок пользователей
+user_subscriptions = {}
 
 # Функция для получения OAuth токена Twitch
 def get_twitch_oauth_token():
@@ -32,8 +30,8 @@ def get_twitch_oauth_token():
     response.raise_for_status()
     return response.json()['access_token']
 
-# Получаем информацию о стримах
-def check_twitch_streams(bot: Bot, chat_id: int, twitch_oauth_token: str):
+# Проверка статуса стримов
+def check_twitch_streams(bot: Bot, twitch_oauth_token: str):
     headers = {
         'Client-ID': TWITCH_CLIENT_ID,
         'Authorization': f'Bearer {twitch_oauth_token}'
@@ -44,39 +42,53 @@ def check_twitch_streams(bot: Bot, chat_id: int, twitch_oauth_token: str):
         response = requests.get(TWITCH_API_URL, headers=headers, params=params)
         data = response.json()
         
-        # Проверяем, идет ли трансляция
+        # Если стрим идет, уведомляем всех подписанных пользователей
         if data['data']:
-            if not live_status[username]:  # Если раньше не было стрима
-                live_status[username] = True
-                stream_title = data['data'][0]['title']
-                message = f'{username} начал трансляцию: {stream_title}\nСмотреть: https://twitch.tv/{username}'
-                bot.send_message(chat_id=chat_id, text=message)
-        else:
-            live_status[username] = False  # Если стрима нет
+            stream_title = data['data'][0]['title']
+            for chat_id, subscriptions in user_subscriptions.items():
+                if username in subscriptions:
+                    message = f'{username} начал трансляцию: {stream_title}\nСмотреть: https://twitch.tv/{username}'
+                    bot.send_message(chat_id=chat_id, text=message)
 
-# Команда /start для подписки на уведомления
+# Стартовая команда
 def start(update: Update, context: CallbackContext) -> None:
     chat_id = update.message.chat_id
-    context.bot.send_message(chat_id=chat_id, text="Подписка на уведомления о стримах Twitch активирована!")
+    user_subscriptions[chat_id] = []  # Инициализация пустого списка подписок
+
+    # Кнопки с именами стримеров
+    keyboard = [[InlineKeyboardButton(streamer, callback_data=streamer)] for streamer in TWITCH_USERNAMES]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    # Сообщение с картинкой и кнопками
+    context.bot.send_photo(
+        chat_id=chat_id,
+        photo="https://example.com/image.jpg",  # Замените ссылку на вашу картинку
+        caption="Привет, я бот уведомлений стримов Encore\nОт каких стримеров вы хотите получать уведомления? Нажмите на кнопки",
+        reply_markup=reply_markup
+    )
+
+# Обработка нажатий кнопок
+def button_callback(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    streamer = query.data
+    chat_id = query.message.chat_id
     
-    # Получаем токен и запускаем проверку трансляций
-    twitch_oauth_token = get_twitch_oauth_token()
-    
-    # Планируем проверку стримов через schedule
-    schedule.every(CHECK_INTERVAL).seconds.do(check_twitch_streams, bot=context.bot, chat_id=chat_id, twitch_oauth_token=twitch_oauth_token)
-    
-    # Цикл для выполнения задач по расписанию
-    while True:
-        schedule.run_pending()
-        time.sleep(1)
+    # Добавление стримера в подписки
+    if streamer not in user_subscriptions[chat_id]:
+        user_subscriptions[chat_id].append(streamer)
+        query.answer()  # Отправляем подтверждение нажатия
+        context.bot.send_message(chat_id=chat_id, text=f"Вы подписались на стримы от {streamer}")
+    else:
+        query.answer()  # Если уже подписан, не добавляем повторно
+        context.bot.send_message(chat_id=chat_id, text=f"Вы уже подписаны на {streamer}")
 
 # Запуск бота
 def main():
     updater = Updater(TELEGRAM_TOKEN, use_context=True)
-
-    # Регистрация команд
     dispatcher = updater.dispatcher
+
     dispatcher.add_handler(CommandHandler("start", start))
+    dispatcher.add_handler(CallbackQueryHandler(button_callback))
 
     # Запуск бота
     updater.start_polling()
