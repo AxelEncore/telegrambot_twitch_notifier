@@ -1,6 +1,6 @@
+import sqlite3
 import logging
 import requests
-import psycopg2
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Updater, CommandHandler, CallbackQueryHandler, CallbackContext
 from threading import Timer
@@ -13,27 +13,29 @@ TWITCH_CLIENT_SECRET = os.getenv('TWITCH_CLIENT_SECRET')
 TWITCH_USERNAMES = ['axelencore', 'yatoencoree', 'julia_encore', 'aliseencore']
 TWITCH_API_URL = 'https://api.twitch.tv/helix/streams'
 CHECK_INTERVAL = 60  # Интервал проверки стримов (в секундах)
-
-# Параметры подключения к базе данных
-DB_HOST = os.getenv('DB_HOST')
-DB_PORT = os.getenv('DB_PORT')
-DB_NAME = os.getenv('DB_NAME')
-DB_USER = os.getenv('DB_USER')
-DB_PASSWORD = os.getenv('DB_PASSWORD')
+DB_FILE = 'subscriptions.db'  # Файл базы данных
 
 # Логгирование
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Подключение к базе данных
+# Функция для подключения к базе данных SQLite
 def connect_db():
-    return psycopg2.connect(
-        host=DB_HOST,
-        port=DB_PORT,
-        dbname=DB_NAME,
-        user=DB_USER,
-        password=DB_PASSWORD
-    )
+    return sqlite3.connect(DB_FILE)
+
+# Создание таблицы, если она не существует
+def create_table():
+    conn = connect_db()
+    cursor = conn.cursor()
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS subscriptions (
+        chat_id INTEGER PRIMARY KEY,
+        streamers TEXT
+    );
+    """)
+    conn.commit()
+    cursor.close()
+    conn.close()
 
 # Функция для загрузки подписок из базы данных
 def load_subscriptions():
@@ -41,7 +43,7 @@ def load_subscriptions():
     cursor = conn.cursor()
     cursor.execute("SELECT chat_id, streamers FROM subscriptions;")
     rows = cursor.fetchall()
-    subscriptions = {row[0]: row[1] for row in rows}
+    subscriptions = {row[0]: row[1].split(',') for row in rows if row[1]}  # Преобразуем строку в список
     cursor.close()
     conn.close()
     return subscriptions
@@ -52,10 +54,10 @@ def save_subscription(chat_id, streamers):
     cursor = conn.cursor()
     cursor.execute("""
         INSERT INTO subscriptions (chat_id, streamers)
-        VALUES (%s, %s)
-        ON CONFLICT (chat_id) 
-        DO UPDATE SET streamers = EXCLUDED.streamers;
-    """, (chat_id, streamers))
+        VALUES (?, ?)
+        ON CONFLICT(chat_id) 
+        DO UPDATE SET streamers=excluded.streamers;
+    """, (chat_id, ','.join(streamers)))  # Сохраняем список как строку
     conn.commit()
     cursor.close()
     conn.close()
@@ -122,7 +124,7 @@ def start(update: Update, context: CallbackContext) -> None:
     # Сообщение с картинкой и кнопками
     context.bot.send_photo(
         chat_id=chat_id,
-        photo="https://axelencore.ru/wp-content/uploads/2024/09/Oreo.jpg",
+        photo="https://axelencore.ru/wp-content/uploads/2024/09/Oreo.jpg",  # Убедитесь, что это действительная ссылка
         caption="Привет, я бот Oreo - уведомляю о стримах Encore\nОт каких стримеров вы хотите получать уведомления? Нажмите на кнопки",
         reply_markup=reply_markup
     )
@@ -145,6 +147,9 @@ def button_callback(update: Update, context: CallbackContext) -> None:
 
 # Запуск бота
 def main():
+    # Создаем таблицу, если ее еще нет
+    create_table()
+
     updater = Updater(TELEGRAM_TOKEN, use_context=True)
     dispatcher = updater.dispatcher
 
