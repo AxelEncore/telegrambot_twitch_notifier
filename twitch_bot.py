@@ -90,7 +90,8 @@ def main():
     dispatcher.add_handler(CallbackQueryHandler(button_callback))
 
     # Настройка webhook
-    updater.bot.set_webhook(url='https://worker-production-1f60.up.railway.app')
+    # Убедитесь, что здесь используется ваш правильный домен Railway (вместо 0.0.0.0)
+    updater.bot.set_webhook(url='https://worker-production-1f60.up.railway.app/' + TELEGRAM_TOKEN)
     updater.start_webhook(listen="0.0.0.0", port=8443, url_path=TELEGRAM_TOKEN)
 
     updater.idle()
