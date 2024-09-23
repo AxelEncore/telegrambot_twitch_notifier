@@ -9,3 +9,5 @@ venv/
 
 # Log files
 *.log
+
+subscriptions.json
