@@ -8,9 +8,9 @@ from telegram.ext import Updater, CommandHandler, CallbackQueryHandler, Callback
 # from threading import Timer
 
 # Настройки
-TELEGRAM_TOKEN = 'Ваш_токен'
-TWITCH_CLIENT_ID = 'Ваш_клиент_ID'
-TWITCH_CLIENT_SECRET = 'Ваш_секретный_ключ'
+TELEGRAM_TOKEN = '8049016680:AAFo45bEX8HlSnKiX_bfnYY_KhaWaUJu7PE'
+TWITCH_CLIENT_ID = 'w2y2t05i7iwk43yj6ncyvtvnqzmkze'
+TWITCH_CLIENT_SECRET = 'egxo7iiha9dhv6ap4z1k4rvfpltbzg'
 TWITCH_USERNAMES = ['axelencore', 'yatoencoree', 'julia_encore', 'aliseencore', 'hotabych4', 'waterspace17']
 TWITCH_API_URL = 'https://api.twitch.tv/helix/streams'
 CHECK_INTERVAL = 60  # Интервал проверки стримов (в секундах)
