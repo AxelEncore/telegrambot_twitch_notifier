@@ -77,8 +77,11 @@ def start(update: Update, context: CallbackContext):
         keyboard.append([InlineKeyboardButton(streamer, callback_data=streamer)])
     reply_markup = InlineKeyboardMarkup(keyboard)
 
-    update.message.reply_text(
-        "Привет! Выберите стримеров, на которых хотите подписаться для получения уведомлений:",
+    # Отправляем сообщение с изображением и кнопками
+    context.bot.send_photo(
+        chat_id=chat_id,
+        photo="https://axelencore.ru/wp-content/uploads/2024/09/Oreo.jpg",  # Замените на действительный URL изображения
+        caption="Привет! Я бот Oreo - уведомляю о стримах Encore.\nВыберите стримеров, на которых хотите подписаться для получения уведомлений:",
         reply_markup=reply_markup
     )
 
