@@ -20,19 +20,34 @@ logger = logging.getLogger(__name__)
 # Словарь для хранения подписок пользователей
 user_subscriptions = {}
 
-# Функция для загрузки подписок из файла
+# Функция для чтения подписок из файла
 def load_subscriptions():
     global user_subscriptions
     if os.path.exists(SUBSCRIPTIONS_FILE):
         with open(SUBSCRIPTIONS_FILE, 'r') as f:
-            user_subscriptions = json.load(f)
+            try:
+                content = f.read()
+                if content.strip():
+                    user_subscriptions = json.loads(content)
+                    logger.info("Подписки успешно загружены.")
+                else:
+                    user_subscriptions = {}
+                    logger.info("Файл подписок пуст. Инициализируем пустой словарь подписок.")
+            except json.JSONDecodeError as e:
+                user_subscriptions = {}
+                logger.error(f"Ошибка при загрузке подписок: {e}. Инициализируем пустой словарь подписок.")
     else:
         user_subscriptions = {}
+        logger.info("Файл подписок не найден. Инициализируем пустой словарь подписок.")
 
 # Функция для сохранения подписок в файл
 def save_subscriptions():
-    with open(SUBSCRIPTIONS_FILE, 'w') as f:
-        json.dump(user_subscriptions, f)
+    try:
+        with open(SUBSCRIPTIONS_FILE, 'w') as f:
+            json.dump(user_subscriptions, f, indent=4)
+        logger.info("Подписки успешно сохранены.")
+    except Exception as e:
+        logger.error(f"Ошибка при сохранении подписок: {e}")
 
 # Функция для получения OAuth токена Twitch
 def get_twitch_oauth_token():
@@ -106,11 +121,16 @@ def button(update: Update, context: CallbackContext):
 
 # Главная функция
 def main():
-    load_subscriptions()
+    try:
+        load_subscriptions()
+    except Exception as e:
+        logger.error(f"Ошибка при загрузке подписок: {e}")
+        user_subscriptions = {}
+
     updater = Updater(TELEGRAM_TOKEN, use_context=True)
     dispatcher = updater.dispatcher
 
-    # Регистрация обработчиков
+    # Добавляем обработчики
     dispatcher.add_handler(CommandHandler('start', start))
     dispatcher.add_handler(CallbackQueryHandler(button))
 
