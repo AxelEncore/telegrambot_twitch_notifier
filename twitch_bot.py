@@ -89,7 +89,7 @@ def start(update: Update, context: CallbackContext):
     message = context.bot.send_photo(
         chat_id=chat_id,
         photo="https://axelencore.ru/wp-content/uploads/2024/09/Oreo.jpg",  # Убедитесь, что URL корректен
-        text="Привет! Я бот Oreo - уведомляю о стримах семьи Encore.",
+        caption="Привет! Я бот Oreo - уведомляю о стримах семьи Encore.",
         reply_markup=main_reply_markup
     )
 
@@ -136,7 +136,7 @@ def send_subscribe_options(update: Update, context: CallbackContext):
     # Отправляем сообщение с изображением и кнопками
     message = context.bot.send_message(
         chat_id=chat_id,
-        caption="Выберите стримеров, на которых хотите подписаться для получения уведомлений:",
+        text="Выберите стримеров, на которых хотите подписаться для получения уведомлений:",
         reply_markup=reply_markup
     )
 
