@@ -19,6 +19,7 @@ from telegram.ext import (
     Filters
 )
 
+
 # Настройки
 TELEGRAM_TOKEN = '8049016680:AAFo45bEX8HlSnKiX_bfnYY_KhaWaUJu7PE'  # Замените на токен вашего бота
 TWITCH_CLIENT_ID = 'w2y2t05i7iwk43yj6ncyvtvnqzmkze'  # Замените на ваш Twitch Client ID
@@ -33,6 +34,12 @@ redis_client = redis.Redis.from_url(REDIS_URL)
 # Настройка логирования
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Основная клавиатура с кнопками "Подписаться" и "Отписаться"
+reply_keyboard = [
+    [KeyboardButton("Подписаться"), KeyboardButton("Отписаться")]
+]
+main_reply_markup = ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True)
 
 # Функция для получения OAuth токена Twitch
 def get_twitch_oauth_token():
@@ -68,7 +75,7 @@ def check_streams(context: CallbackContext):
                 notified_key = f'notified:{chat_id}:{streamer}'
                 if not redis_client.exists(notified_key):
                     message = f"🔴 {streamer} сейчас в эфире!\nСмотреть стрим: https://twitch.tv/{streamer}"
-                    context.bot.send_message(chat_id=int(chat_id), text=message)
+                    context.bot.send_message(chat_id=int(chat_id), text=message, reply_markup=main_reply_markup)
                     redis_client.set(notified_key, '1')
             else:
                 redis_client.delete(f'notified:{chat_id}:{streamer}')
@@ -78,21 +85,15 @@ def start(update: Update, context: CallbackContext):
     chat_id = str(update.effective_chat.id)
     redis_client.sadd('subscribers', chat_id)
 
-    # Создаем клавиатуру с кнопками "Подписаться" и "Отписаться"
-    keyboard = [
-        [KeyboardButton("Подписаться"), KeyboardButton("Отписаться")]
-    ]
-    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-
     # Отправляем приветственное сообщение с кнопками
     message = context.bot.send_message(
         chat_id=chat_id,
         text="Привет! Я бот Oreo - уведомляю о стримах Encore.\nВыберите действие:",
-        reply_markup=reply_markup
+        reply_markup=main_reply_markup
     )
 
-    # Сохраняем ID сообщения с кнопками
-    redis_client.set(f'buttons_message:{chat_id}', message.message_id)
+    # Сохраняем ID сообщения с кнопками (если понадобится)
+    # redis_client.set(f'buttons_message:{chat_id}', message.message_id)
 
     # Отправляем варианты подписки
     send_subscribe_options(update, context)
@@ -115,23 +116,14 @@ def text_message_handler(update: Update, context: CallbackContext):
         delete_previous_bot_message(chat_id, context)
         send_unsubscribe_options(update, context)
     else:
-        context.bot.send_message(chat_id=chat_id, text="Пожалуйста, выберите действие с помощью кнопок ниже.")
+        context.bot.send_message(chat_id=chat_id, text="Пожалуйста, выберите действие с помощью кнопок ниже.", reply_markup=main_reply_markup)
 
-    # Удаляем сообщение с кнопками "Подписаться" и "Отписаться"
-    buttons_message_id = redis_client.get(f'buttons_message:{chat_id}')
-    if buttons_message_id:
+    # Удаляем сообщение пользователя с текстом кнопки "Подписаться" или "Отписаться"
+    if text in ["Подписаться", "Отписаться"]:
         try:
-            context.bot.delete_message(chat_id=int(chat_id), message_id=int(buttons_message_id))
+            context.bot.delete_message(chat_id=chat_id, message_id=update.message.message_id)
         except Exception as e:
-            logger.error(f"Ошибка при удалении сообщения с кнопками: {e}")
-        finally:
-            redis_client.delete(f'buttons_message:{chat_id}')
-
-    # Удаляем сообщение пользователя с текстом кнопки
-    try:
-        context.bot.delete_message(chat_id=chat_id, message_id=update.message.message_id)
-    except Exception as e:
-        logger.error(f"Ошибка при удалении сообщения пользователя: {e}")
+            logger.error(f"Ошибка при удалении сообщения пользователя: {e}")
 
 # Функция для отправки вариантов подписки
 def send_subscribe_options(update: Update, context: CallbackContext):
@@ -163,7 +155,7 @@ def send_unsubscribe_options(update: Update, context: CallbackContext):
     subscriptions = [s.decode() for s in subscriptions]
 
     if not subscriptions:
-        context.bot.send_message(chat_id=chat_id, text="Вы не подписаны ни на одного стримера.")
+        context.bot.send_message(chat_id=chat_id, text="Вы не подписаны ни на одного стримера.", reply_markup=main_reply_markup)
         return
 
     # Создаем кнопки с именами стримеров для отписки
@@ -203,7 +195,7 @@ def button(update: Update, context: CallbackContext):
         streamer = data.split(':', 1)[1]
         if not redis_client.sismember(f'subscriptions:{chat_id}', streamer):
             redis_client.sadd(f'subscriptions:{chat_id}', streamer)
-            context.bot.send_message(chat_id=int(chat_id), text=f"Вы успешно подписались на {streamer}")
+            context.bot.send_message(chat_id=int(chat_id), text=f"Вы успешно подписались на {streamer}", reply_markup=main_reply_markup)
             query.answer()
         else:
             query.answer(f"Вы уже подписаны на {streamer}")
@@ -211,7 +203,7 @@ def button(update: Update, context: CallbackContext):
         streamer = data.split(':', 1)[1]
         if redis_client.sismember(f'subscriptions:{chat_id}', streamer):
             redis_client.srem(f'subscriptions:{chat_id}', streamer)
-            context.bot.send_message(chat_id=int(chat_id), text=f"Вы успешно отписались от {streamer}")
+            context.bot.send_message(chat_id=int(chat_id), text=f"Вы успешно отписались от {streamer}", reply_markup=main_reply_markup)
             # Обновляем список подписок
             subscriptions = redis_client.smembers(f'subscriptions:{chat_id}')
             subscriptions = [s.decode() for s in subscriptions]
