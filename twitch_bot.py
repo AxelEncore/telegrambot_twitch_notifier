@@ -5,13 +5,17 @@ import redis
 from telegram import (
     Update, 
     InlineKeyboardButton, 
-    InlineKeyboardMarkup
+    InlineKeyboardMarkup, 
+    ReplyKeyboardMarkup, 
+    KeyboardButton
 )
 from telegram.ext import (
     Updater, 
     CommandHandler, 
     CallbackQueryHandler, 
-    CallbackContext
+    CallbackContext, 
+    MessageHandler, 
+    Filters
 )
 
 # Настройки
@@ -73,19 +77,17 @@ def start(update: Update, context: CallbackContext):
     chat_id = str(update.effective_chat.id)
     redis_client.sadd('subscribers', chat_id)
 
-    # Создаем клавиатуру с кнопками "Подписаться" и "Отписаться" с помощью InlineKeyboardMarkup
+    # Создаем кнопки для нижней панели
     keyboard = [
-        [
-            InlineKeyboardButton("Подписаться", callback_data='show_subscribe'),
-            InlineKeyboardButton("Отписаться", callback_data='show_unsubscribe')
-        ]
+        [KeyboardButton("Подписаться"), KeyboardButton("Отписаться")]
     ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
+    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
-    # Отправляем приветственное сообщение
-    message = context.bot.send_message(
+    # Отправляем приветственное сообщение с картинкой и кнопками
+    message = context.bot.send_photo(
         chat_id=chat_id,
-        text="Привет! Я бот Oreo - уведомляю о стримах Encore.\nВыберите действие:",
+        photo="https://axelencore.ru/wp-content/uploads/2024/09/Oreo.jpg",  # Замените на действительный URL изображения
+        caption="Привет! Я бот Oreo - уведомляю о стримах Encore.\nВыберите стримеров, на которых хотите подписаться для получения уведомлений:",
         reply_markup=reply_markup
     )
 
@@ -98,48 +100,19 @@ def start(update: Update, context: CallbackContext):
     except Exception as e:
         logger.warning(f"Не удалось удалить сообщение /start: {e}")
 
-# Обработчик нажатий на кнопки
-def button(update: Update, context: CallbackContext):
-    query = update.callback_query
-    data = query.data
-    chat_id = str(query.message.chat.id)
+# Обработчик текстовых сообщений от кнопок в нижней панели
+def text_message_handler(update: Update, context: CallbackContext):
+    chat_id = str(update.effective_chat.id)
+    text = update.message.text
 
-    if data == 'show_subscribe':
+    if text == "Подписаться":
         delete_previous_bot_message(chat_id, context)
         send_subscribe_options(chat_id, context)
-        query.answer()
-    elif data == 'show_unsubscribe':
+    elif text == "Отписаться":
         delete_previous_bot_message(chat_id, context)
         send_unsubscribe_options(chat_id, context)
-        query.answer()
-    elif data.startswith('subscribe:'):
-        streamer = data.split(':', 1)[1]
-        if not redis_client.sismember(f'subscriptions:{chat_id}', streamer):
-            redis_client.sadd(f'subscriptions:{chat_id}', streamer)
-            query.answer(f"Вы успешно подписались на {streamer}")
-        else:
-            query.answer(f"Вы уже подписаны на {streamer}")
-    elif data.startswith('unsubscribe:'):
-        streamer = data.split(':', 1)[1]
-        if redis_client.sismember(f'subscriptions:{chat_id}', streamer):
-            redis_client.srem(f'subscriptions:{chat_id}', streamer)
-            query.answer(f"Вы успешно отписались от {streamer}")
-            # Обновляем список подписок
-            subscriptions = redis_client.smembers(f'subscriptions:{chat_id}')
-            subscriptions = [s.decode() for s in subscriptions]
-            if subscriptions:
-                # Обновляем клавиатуру
-                keyboard = []
-                for s in subscriptions:
-                    keyboard.append([InlineKeyboardButton(s, callback_data=f'unsubscribe:{s}')])
-                reply_markup = InlineKeyboardMarkup(keyboard)
-                query.edit_message_text(text="Выбери стримеров, от которых ты хочешь отписаться:", reply_markup=reply_markup)
-            else:
-                query.edit_message_text(text="Вы не подписаны ни на одного стримера.")
-        else:
-            query.answer(f"Вы не были подписаны на {streamer}")
     else:
-        query.answer("Неизвестная команда.")
+        context.bot.send_message(chat_id=chat_id, text="Пожалуйста, выберите действие с помощью кнопок ниже.")
 
 # Функция для отправки вариантов подписки
 def send_subscribe_options(chat_id, context):
@@ -149,11 +122,10 @@ def send_subscribe_options(chat_id, context):
         keyboard.append([InlineKeyboardButton(streamer, callback_data=f'subscribe:{streamer}')])
     reply_markup = InlineKeyboardMarkup(keyboard)
 
-    # Отправляем сообщение с изображением и кнопками
-    message = context.bot.send_photo(
+    # Отправляем сообщение с кнопками
+    message = context.bot.send_message(
         chat_id=chat_id,
-        photo="https://axelencore.ru/wp-content/uploads/2024/09/Oreo.jpg",  # Убедитесь, что URL корректен
-        caption="Выберите стримеров, на которых хотите подписаться для получения уведомлений:",
+        text="Выберите стримеров, на которых хотите подписаться для получения уведомлений:",
         reply_markup=reply_markup
     )
 
@@ -197,6 +169,41 @@ def delete_previous_bot_message(chat_id, context):
         finally:
             redis_client.delete(f'last_message:{chat_id}')
 
+# Обработчик нажатий на кнопки
+def button(update: Update, context: CallbackContext):
+    query = update.callback_query
+    data = query.data
+    chat_id = str(query.message.chat.id)
+
+    if data.startswith('subscribe:'):
+        streamer = data.split(':', 1)[1]
+        if not redis_client.sismember(f'subscriptions:{chat_id}', streamer):
+            redis_client.sadd(f'subscriptions:{chat_id}', streamer)
+            query.answer(f"Вы успешно подписались на {streamer}")
+        else:
+            query.answer(f"Вы уже подписаны на {streamer}")
+    elif data.startswith('unsubscribe:'):
+        streamer = data.split(':', 1)[1]
+        if redis_client.sismember(f'subscriptions:{chat_id}', streamer):
+            redis_client.srem(f'subscriptions:{chat_id}', streamer)
+            query.answer(f"Вы успешно отписались от {streamer}")
+            # Обновляем список подписок
+            subscriptions = redis_client.smembers(f'subscriptions:{chat_id}')
+            subscriptions = [s.decode() for s in subscriptions]
+            if subscriptions:
+                # Обновляем клавиатуру
+                keyboard = []
+                for s in subscriptions:
+                    keyboard.append([InlineKeyboardButton(s, callback_data=f'unsubscribe:{s}')])
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                query.edit_message_text(text="Выбери стримеров, от которых ты хочешь отписаться:", reply_markup=reply_markup)
+            else:
+                query.edit_message_text(text="Вы не подписаны ни на одного стримера.")
+        else:
+            query.answer(f"Вы не были подписаны на {streamer}")
+    else:
+        query.answer("Неизвестная команда.")
+
 # Главная функция
 def main():
     updater = Updater(TELEGRAM_TOKEN, use_context=True)
@@ -204,9 +211,8 @@ def main():
 
     # Регистрация обработчиков
     dispatcher.add_handler(CommandHandler('start', start))
+    dispatcher.add_handler(MessageHandler(Filters.text & ~Filters.command, text_message_handler))
     dispatcher.add_handler(CallbackQueryHandler(button))
-    # Удаляем обработчик текстовых сообщений, так как он больше не нужен
-    # dispatcher.add_handler(MessageHandler(Filters.text & ~Filters.command, text_message_handler))
 
     # Планирование задачи проверки стримов
     job_queue = updater.job_queue
