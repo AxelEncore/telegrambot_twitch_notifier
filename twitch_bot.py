@@ -1,7 +1,7 @@
 import os
-import json
 import logging
 import requests
+import redis  # Новая библиотека для работы с Redis
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Updater, CommandHandler, CallbackQueryHandler, CallbackContext
 
@@ -11,43 +11,14 @@ TWITCH_CLIENT_ID = 'w2y2t05i7iwk43yj6ncyvtvnqzmkze'  # Замените на в�
 TWITCH_CLIENT_SECRET = 'egxo7iiha9dhv6ap4z1k4rvfpltbzg'  # Замените на ваш Twitch Client Secret
 TWITCH_USERNAMES = ['axelencore', 'yatoencoree', 'julia_encore', 'aliseencore', 'hotabych4', 'waterspace17']  # Список стримеров для отслеживания
 CHECK_INTERVAL = 60  # Интервал проверки стримов (в секундах)
-SUBSCRIPTIONS_FILE = 'subscriptions.json'  # Файл для хранения подписок
+
+# Настройка Redis
+REDIS_URL = os.getenv('REDIS_URL')  # URL подключения к Redis из переменной окружения
+redis_client = redis.Redis.from_url(REDIS_URL)
 
 # Настройка логирования
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-# Словарь для хранения подписок пользователей
-user_subscriptions = {}
-
-# Функция для чтения подписок из файла
-def load_subscriptions():
-    global user_subscriptions
-    if os.path.exists(SUBSCRIPTIONS_FILE):
-        with open(SUBSCRIPTIONS_FILE, 'r') as f:
-            try:
-                content = f.read()
-                if content.strip():
-                    user_subscriptions = json.loads(content)
-                    logger.info("Подписки успешно загружены.")
-                else:
-                    user_subscriptions = {}
-                    logger.info("Файл подписок пуст. Инициализируем пустой словарь подписок.")
-            except json.JSONDecodeError as e:
-                user_subscriptions = {}
-                logger.error(f"Ошибка при загрузке подписок: {e}. Инициализируем пустой словарь подписок.")
-    else:
-        user_subscriptions = {}
-        logger.info("Файл подписок не найден. Инициализируем пустой словарь подписок.")
-
-# Функция для сохранения подписок в файл
-def save_subscriptions():
-    try:
-        with open(SUBSCRIPTIONS_FILE, 'w') as f:
-            json.dump(user_subscriptions, f, indent=4)
-        logger.info("Подписки успешно сохранены.")
-    except Exception as e:
-        logger.error(f"Ошибка при сохранении подписок: {e}")
 
 # Функция для получения OAuth токена Twitch
 def get_twitch_oauth_token():
@@ -71,29 +42,34 @@ def check_streams(context: CallbackContext):
     active_streams = []
 
     # Получаем информацию о стримах
-    for username in TWITCH_USERNAMES:
-        params = {'user_login': username}
-        response = requests.get('https://api.twitch.tv/helix/streams', headers=headers, params=params)
-        data = response.json()
-        if data['data']:
-            active_streams.append(username)
+    params = [('user_login', username) for username in TWITCH_USERNAMES]
+    response = requests.get('https://api.twitch.tv/helix/streams', headers=headers, params=params)
+    data = response.json()
+    if 'data' in data:
+        active_streams = [stream['user_login'] for stream in data['data']]
 
     # Отправляем уведомления подписанным пользователям
-    for chat_id, subscriptions in user_subscriptions.items():
+    for chat_id in redis_client.smembers('subscribers'):
+        chat_id = chat_id.decode()
+        subscriptions = redis_client.smembers(f'subscriptions:{chat_id}')
+        subscriptions = {s.decode() for s in subscriptions}
         for streamer in subscriptions:
             if streamer in active_streams:
-                message = f"🔴 {streamer} сейчас в эфире!\nСмотреть стрим: https://twitch.tv/{streamer}"
-                context.bot.send_message(chat_id=int(chat_id), text=message)
-                # Удаляем стримера из подписок, чтобы не отправлять повторные уведомления
-                subscriptions.remove(streamer)
-    save_subscriptions()
+                # Проверяем, отправляли ли уже уведомление
+                if not redis_client.get(f'notified:{chat_id}:{streamer}'):
+                    message = f"🔴 {streamer} сейчас в эфире!\nСмотреть стрим: https://twitch.tv/{streamer}"
+                    context.bot.send_message(chat_id=int(chat_id), text=message)
+                    # Отмечаем, что уведомление отправлено
+                    redis_client.set(f'notified:{chat_id}:{streamer}', '1')
+            else:
+                # Сбрасываем отметку об отправленном уведомлении
+                redis_client.delete(f'notified:{chat_id}:{streamer}')
 
 # Команда /start
 def start(update: Update, context: CallbackContext):
     chat_id = str(update.effective_chat.id)
-    if chat_id not in user_subscriptions:
-        user_subscriptions[chat_id] = []
-        save_subscriptions()
+    # Добавляем пользователя в список подписчиков
+    redis_client.sadd('subscribers', chat_id)
 
     # Создаем кнопки с именами стримеров
     keyboard = []
@@ -112,25 +88,18 @@ def button(update: Update, context: CallbackContext):
     streamer = query.data
     chat_id = str(query.message.chat.id)
 
-    if streamer not in user_subscriptions.get(chat_id, []):
-        user_subscriptions[chat_id].append(streamer)
-        save_subscriptions()
+    if not redis_client.sismember(f'subscriptions:{chat_id}', streamer):
+        redis_client.sadd(f'subscriptions:{chat_id}', streamer)
         query.answer(f"Вы подписались на {streamer}")
     else:
         query.answer(f"Вы уже подписаны на {streamer}")
 
 # Главная функция
 def main():
-    try:
-        load_subscriptions()
-    except Exception as e:
-        logger.error(f"Ошибка при загрузке подписок: {e}")
-        user_subscriptions = {}
-
     updater = Updater(TELEGRAM_TOKEN, use_context=True)
     dispatcher = updater.dispatcher
 
-    # Добавляем обработчики
+    # Регистрация обработчиков
     dispatcher.add_handler(CommandHandler('start', start))
     dispatcher.add_handler(CallbackQueryHandler(button))
 
