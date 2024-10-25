@@ -92,9 +92,6 @@ def start(update: Update, context: CallbackContext):
         reply_markup=main_reply_markup
     )
 
-    # Сохраняем ID сообщения с кнопками (если понадобится)
-    # redis_client.set(f'buttons_message:{chat_id}', message.message_id)
-
     # Отправляем варианты подписки
     send_subscribe_options(update, context)
 
@@ -195,15 +192,14 @@ def button(update: Update, context: CallbackContext):
         streamer = data.split(':', 1)[1]
         if not redis_client.sismember(f'subscriptions:{chat_id}', streamer):
             redis_client.sadd(f'subscriptions:{chat_id}', streamer)
-            context.bot.send_message(chat_id=int(chat_id), text=f"Вы успешно подписались на {streamer}", reply_markup=main_reply_markup)
-            query.answer()
+            query.answer(f"Вы успешно подписались на {streamer}")
         else:
             query.answer(f"Вы уже подписаны на {streamer}")
     elif data.startswith('unsubscribe:'):
         streamer = data.split(':', 1)[1]
         if redis_client.sismember(f'subscriptions:{chat_id}', streamer):
             redis_client.srem(f'subscriptions:{chat_id}', streamer)
-            context.bot.send_message(chat_id=int(chat_id), text=f"Вы успешно отписались от {streamer}", reply_markup=main_reply_markup)
+            query.answer(f"Вы успешно отписались от {streamer}")
             # Обновляем список подписок
             subscriptions = redis_client.smembers(f'subscriptions:{chat_id}')
             subscriptions = [s.decode() for s in subscriptions]
@@ -216,7 +212,6 @@ def button(update: Update, context: CallbackContext):
                 query.edit_message_text(text="Выберите стримеров, от которых вы хотите отписаться:", reply_markup=reply_markup)
             else:
                 query.edit_message_text(text="Вы не подписаны ни на одного стримера.")
-            query.answer()
         else:
             query.answer(f"Вы не были подписаны на {streamer}")
     else:
